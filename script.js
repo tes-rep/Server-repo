@@ -151,7 +151,7 @@ function showEmptyState(message) {
         wizard.innerHTML = `
             <div class="empty-state" style="text-align: center; padding: 40px; color: #666;">
                 <h3>${message}</h3>
-                <p>Belum ada firmware yang tersedia saat ini.</p>
+                <p>Comingson yah sayang | Terimakasih.</p>
                 <button onclick="loadData()" style="margin-top: 15px; padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
                     Refresh
                 </button>
@@ -205,7 +205,7 @@ async function loadData() {
         }
         
         if (!Array.isArray(releases) || releases.length === 0) {
-            showEmptyState("Tidak ada release ditemukan");
+            showEmptyState("Tidak ada firmware ditemukan");
             return;
         }
         
