@@ -18,7 +18,7 @@ getUserIP();
 
 function cleanFileName(filename) {
     let name = filename.replace(/\.(img\.gz|tar\.gz|tar\.xz|bin\.gz|img|bin|gz|tar|zip|xz|7z|bz2)$/gi, "");
-    name = name.replace(/[-_]*By[-_]*Xidz[-_]*X[-_]*/gi, "").replace(/[-_]*xidz[-_]*x[-_]*/gi, "");
+    name = name.replace(/[-_]*By[-_]*fidzx[-_]*X[-_]*/gi, "").replace(/[-_]*fidzx[-_]*x[-_]*/gi, "");
     name = name.replace(/[-_]{2,}/g, "-").replace(/[-_]+$/g, "").replace(/^[-_]+/g, "").trim();
     return name;
 }
@@ -114,7 +114,7 @@ function startCountdown() {
 }
 
 function initThemeSystem() {
-    const savedTheme = localStorage.getItem('xidzs-theme') || 'neomorphism';
+    const savedTheme = localStorage.getItem('xidzs-theme') || 'neomorp';
     applyTheme(savedTheme);
     document.querySelectorAll('.theme-button').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -126,7 +126,7 @@ function initThemeSystem() {
 
 function applyTheme(themeName) {
     document.body.classList.remove('theme-dark', 'theme-blue', 'theme-green', 'theme-purple');
-    if (themeName !== 'neomorphism') {
+    if (themeName !== 'neomorp') {
         document.body.classList.add(`theme-${themeName}`);
     }
     document.querySelectorAll('.theme-button').forEach(btn => {
@@ -175,10 +175,10 @@ function showError(message) {
     if (wizard) {
         wizard.innerHTML = `
             <div class="error-message" style="text-align: center; padding: 40px; color: #ff6b6b;">
-                <h3>Gagal memuat data firmware</h3>
+                <h3>Firmware Belum Tersedia Sayang</h3>
                 <p>Error: ${message}</p>
                 <button onclick="loadData()" style="margin-top: 15px; padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    Coba Lagi
+                    Coba Lagi Nanti
                 </button>
             </div>
         `;
