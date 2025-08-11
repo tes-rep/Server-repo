@@ -1,12 +1,20 @@
-const apiURL = "https://api.github.com/repos/de-quenx/XIDZs-WRT/releases";
+const apiURL = "./releases.json";
 let builds = [];
 let selectedFirmware = null;
 let userIP = null;
 let countdownInterval = null;
 
-fetch("https://api64.ipify.org?format=json")
-    .then(res => res.json())
-    .then(data => { userIP = data.ip; });
+async function getUserIP() {
+    try {
+        const response = await fetch("https://api64.ipify.org?format=json");
+        const data = await response.json();
+        userIP = data.ip;
+    } catch (error) {
+        userIP = "unknown";
+    }
+}
+
+getUserIP();
 
 function cleanFileName(filename) {
     let name = filename.replace(/\.(img\.gz|tar\.gz|tar\.xz|bin\.gz|img|bin|gz|tar|zip|xz|7z|bz2)$/gi, "");
@@ -127,16 +135,93 @@ function applyTheme(themeName) {
     });
 }
 
+function showEmptyState(message) {
+    const firmwareCountElement = document.getElementById("firmwareCount");
+    const searchBtnElement = document.getElementById("searchBtn");
+    const wizard = document.getElementById("wizard");
+    
+    if (firmwareCountElement) {
+        firmwareCountElement.textContent = message;
+    }
+    if (searchBtnElement) {
+        searchBtnElement.textContent = "Pencarian";
+    }
+    
+    if (wizard) {
+        wizard.innerHTML = `
+            <div class="empty-state" style="text-align: center; padding: 40px; color: #666;">
+                <h3>${message}</h3>
+                <p>Belum ada firmware yang tersedia saat ini.</p>
+                <button onclick="loadData()" style="margin-top: 15px; padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Refresh
+                </button>
+            </div>
+        `;
+    }
+}
+
+function showError(message) {
+    const firmwareCountElement = document.getElementById("firmwareCount");
+    const searchBtnElement = document.getElementById("searchBtn");
+    const wizard = document.getElementById("wizard");
+    
+    if (firmwareCountElement) {
+        firmwareCountElement.textContent = "Error loading firmware";
+    }
+    if (searchBtnElement) {
+        searchBtnElement.textContent = "Pencarian";
+    }
+    
+    if (wizard) {
+        wizard.innerHTML = `
+            <div class="error-message" style="text-align: center; padding: 40px; color: #ff6b6b;">
+                <h3>Gagal memuat data firmware</h3>
+                <p>Error: ${message}</p>
+                <button onclick="loadData()" style="margin-top: 15px; padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Coba Lagi
+                </button>
+            </div>
+        `;
+    }
+}
+
 async function loadData() {
     try {
-        const res = await fetch(apiURL, { cache: "no-store" });
+        const res = await fetch(apiURL, { 
+            cache: "no-cache",
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        
         const releases = await res.json();
+        
+        if (releases.message) {
+            throw new Error(releases.message);
+        }
+        
+        if (!Array.isArray(releases) || releases.length === 0) {
+            showEmptyState("Tidak ada release ditemukan");
+            return;
+        }
+        
         builds = [];
         releases.forEach(rel => {
+            if (!rel.assets || rel.assets.length === 0) {
+                return;
+            }
+            
             rel.assets.forEach(asset => {
+                if (!asset.name || !asset.browser_download_url) return;
                 if (!asset.name.match(/\.(img|bin|gz|tar|zip|xz|7z)$/i)) return;
+                
                 const cleanName = cleanFileName(asset.name);
                 if (!cleanName) return;
+                
                 builds.push({
                     displayName: cleanName,
                     originalName: asset.name,
@@ -147,6 +232,12 @@ async function loadData() {
                 });
             });
         });
+        
+        if (builds.length === 0) {
+            showEmptyState("Tidak ada firmware ditemukan");
+            return;
+        }
+        
         const uniqueBuilds = [];
         const seen = new Set();
         builds.forEach(b => {
@@ -157,20 +248,33 @@ async function loadData() {
             }
         });
         builds = uniqueBuilds;
-        document.getElementById("firmwareCount").textContent = `${builds.length} Firmware Tersedia`;
-        document.getElementById("searchBtn").textContent = `Pencarian`;
+        
+        const firmwareCountElement = document.getElementById("firmwareCount");
+        const searchBtnElement = document.getElementById("searchBtn");
+        
+        if (firmwareCountElement) {
+            firmwareCountElement.textContent = `${builds.length} Firmware Tersedia`;
+        }
+        if (searchBtnElement) {
+            searchBtnElement.textContent = `Pencarian`;
+        }
+        
         initWizard();
-    } catch {
-        document.getElementById("firmwareCount").textContent = "Error loading firmware";
-        document.getElementById("searchBtn").textContent = "Pencarian";
+        
+    } catch (error) {
+        console.error("Error loading firmware data:", error);
+        showError(error.message);
     }
 }
 
 function initWizard() {
     const wizard = document.getElementById("wizard");
+    if (!wizard) return;
+    
     const allCount = builds.length;
     const openwrtCount = builds.filter(b => b.category === 'openwrt').length;
     const immortalCount = builds.filter(b => b.category === 'immortalwrt').length;
+    
     wizard.innerHTML = `
         <div class="step-card active">
             <label>Pilih Kategori Firmware:</label>
@@ -216,6 +320,9 @@ function initWizard() {
 function setupEventHandlers() {
     const ul = document.querySelector(".firmware-list ul");
     const input = document.querySelector(".search-select input");
+    
+    if (!ul || !input) return;
+    
     let currentCategory = "all";
 
     document.querySelectorAll(".category-btn").forEach(btn => {
@@ -277,6 +384,9 @@ function setupEventHandlers() {
     function updateDownloadSection() {
         const selectedInfo = document.querySelector(".selected-info");
         const downloadBtn = document.getElementById("downloadBtn");
+        
+        if (!selectedInfo || !downloadBtn) return;
+        
         if (selectedFirmware) {
             selectedInfo.innerHTML = `
                 <div class="firmware-selected">
@@ -326,6 +436,9 @@ function handleDownload() {
 function toggleSearch() {
     const searchSelect = document.querySelector(".search-select");
     const toggleBtn = document.querySelector(".search-toggle-btn");
+    
+    if (!searchSelect || !toggleBtn) return;
+    
     if (searchSelect.style.display === "none") {
         searchSelect.style.display = "block";
         toggleBtn.textContent = "Tutup";
@@ -334,32 +447,57 @@ function toggleSearch() {
         searchSelect.style.display = "none";
         toggleBtn.textContent = "Cari";
         toggleBtn.classList.remove("active");
-        searchSelect.querySelector("input").value = "";
-        searchSelect.querySelector("input").dispatchEvent(new Event('input'));
+        const input = searchSelect.querySelector("input");
+        if (input) {
+            input.value = "";
+            input.dispatchEvent(new Event('input'));
+        }
     }
 }
 
 function openModal(modalId) {
     const modal = document.getElementById(modalId);
-    document.querySelector('.wizard-container').classList.add('blur-active');
+    const wizardContainer = document.querySelector('.wizard-container');
+    
+    if (!modal) return;
+    
+    if (wizardContainer) {
+        wizardContainer.classList.add('blur-active');
+    }
     modal.style.display = "block";
     setTimeout(() => modal.classList.add('show'), 10);
 }
 
 function closeModal(modal) {
-    document.querySelector('.wizard-container').classList.remove('blur-active');
+    const wizardContainer = document.querySelector('.wizard-container');
+    
+    if (wizardContainer) {
+        wizardContainer.classList.remove('blur-active');
+    }
     modal.classList.remove('show');
     setTimeout(() => modal.style.display = "none", 300);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
     initThemeSystem();
-    document.getElementById("searchBtn").onclick = () => {
-        document.getElementById("wizard").scrollIntoView({ behavior: 'smooth' });
-    };
+    
+    const searchBtn = document.getElementById("searchBtn");
+    if (searchBtn) {
+        searchBtn.onclick = () => {
+            const wizard = document.getElementById("wizard");
+            if (wizard) {
+                wizard.scrollIntoView({ behavior: 'smooth' });
+            }
+        };
+    }
+    
     document.querySelectorAll(".close").forEach(btn => {
-        btn.onclick = function() { closeModal(this.closest(".modal")); };
+        btn.onclick = function() { 
+            const modal = this.closest(".modal");
+            if (modal) closeModal(modal);
+        };
     });
+    
     window.onclick = e => {
         if (e.target.classList.contains("modal")) closeModal(e.target);
     };
