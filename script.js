@@ -1,65 +1,111 @@
+// ================== CONFIG ==================
 const apiURL = "./releases.json";
 let builds = [];
 let selectedFirmware = null;
 let userIP = null;
 let countdownInterval = null;
 
+// ===== Device & Sub-device Map =====
+const deviceMap = {
+    orangepi: ["orangepi", "orange-pi"],
+    nanopi: ["nanopi", "nano-pi"],
+    raspberrypi: ["raspberry", "rpi", "bcm27"],
+    x86_64: ["x86_64", "x86-64", "amd64"],
+    amlogic: {
+        s905: ["s905", "s905x", "s905x2", "s905x3"],
+        s905x4: ["s905x4"],
+        s912: ["s912"],
+        s922: ["s922"],
+        a311d: ["a311d"],
+        hg680p: ["hg680p"],
+        b860h: ["b860h"],
+        tx3: ["tx3"],
+        h96: ["h96"],
+        advan: ["advan"]
+    }
+};
+
+// ===== Firmware Map =====
+const firmwareMap = {
+    openwrt: ["openwrt"],
+    immortalwrt: ["immortalwrt", "immortal"]
+};
+
+// ================== UTIL FUNCTIONS ==================
 async function getUserIP() {
     try {
-        const response = await fetch("https://api64.ipify.org?format=json");
-        const data = await response.json();
+        const res = await fetch("https://api64.ipify.org?format=json");
+        const data = await res.json();
         userIP = data.ip;
-    } catch (error) {
+    } catch {
         userIP = "unknown";
     }
 }
 
-getUserIP();
-
 function cleanFileName(filename) {
-    let name = filename.replace(/\.(img\.gz|tar\.gz|tar\.xz|bin\.gz|img|bin|gz|tar|zip|xz|7z|bz2)$/gi, "");
-    name = name.replace(/[-_]*By[-_]*fidzx[-_]*X[-_]*/gi, "").replace(/[-_]*fidzx[-_]*x[-_]*/gi, "");
-    name = name.replace(/[-_]{2,}/g, "-").replace(/[-_]+$/g, "").replace(/^[-_]+/g, "").trim();
-    return name;
+    if (filename.toLowerCase().includes("modsdcard")) {
+        return filename.replace(/-\d{8}-MODSDCARD\.(img|bin|gz|tar|zip|xz|7z|bz2)$/gi, "-MODSDCARD");
+    }
+    return filename.replace(/-\d{8}\.(img|bin|gz|tar|zip|xz|7z|bz2)$/gi, "");
+}
+
+function getDeviceCategory(filename) {
+    const lower = filename.toLowerCase();
+    for (const [category, value] of Object.entries(deviceMap)) {
+        if (typeof value === 'object') { // Amlogic sub-device
+            for (const [subDevice, keywords] of Object.entries(value)) {
+                if (keywords.some(k => lower.includes(k))) return subDevice;
+            }
+        } else if (Array.isArray(value)) {
+            if (value.some(k => lower.includes(k))) return category;
+        }
+    }
+    return "unknown";
 }
 
 function getFirmwareCategory(filename) {
     const lower = filename.toLowerCase();
-    return (lower.includes("immortalwrt") || lower.includes("immortal")) ? "immortalwrt" : "openwrt";
+    for (const [category, keywords] of Object.entries(firmwareMap)) {
+        if (keywords.some(k => lower.includes(k))) return category;
+    }
+    return "openwrt";
 }
 
 function formatFileSize(bytes) {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
+    if (!bytes) return "0 B";
     const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
 }
 
 function formatDownloadCount(count) {
-    if (count >= 1000000) return (count / 1000000).toFixed(1) + 'M';
-    if (count >= 1000) return (count / 1000).toFixed(1) + 'K';
+    if (count >= 1e6) return (count / 1e6).toFixed(1) + 'M';
+    if (count >= 1e3) return (count / 1e3).toFixed(1) + 'K';
     return count.toString();
 }
 
+function formatDate(dateStr) {
+    if (!dateStr) return 'Unknown';
+    const d = new Date(dateStr);
+    if (isNaN(d)) return 'Unknown';
+    return d.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+// ================== DOWNLOAD CONTROL ==================
 function adjustDownloadCount(firmwareUrl, originalCount) {
     if (!userIP) return originalCount;
-    const downloadedKey = `downloaded_${firmwareUrl}_${userIP}`;
-    if (localStorage.getItem(downloadedKey)) {
-        return originalCount > 0 ? originalCount - 1 : 0;
-    }
-    return originalCount;
+    const key = `downloaded_${firmwareUrl}_${userIP}`;
+    return localStorage.getItem(key) ? Math.max(0, originalCount - 1) : originalCount;
 }
 
 function getDownloadTimeLeft() {
     if (!userIP) return 0;
     const key = `download_delay_${userIP}`;
-    const lastDownload = localStorage.getItem(key);
-    if (!lastDownload) return 0;
-    const timeDiff = Date.now() - parseInt(lastDownload);
-    const oneMinute = 1 * 60 * 1000;
-    const timeLeft = oneMinute - timeDiff;
-    return timeLeft > 0 ? timeLeft : 0;
+    const last = localStorage.getItem(key);
+    if (!last) return 0;
+    const diff = Date.now() - parseInt(last);
+    const oneMinute = 60 * 1000;
+    return diff < oneMinute ? oneMinute - diff : 0;
 }
 
 function canDownload() {
@@ -68,262 +114,183 @@ function canDownload() {
 
 function setDownloadDelay() {
     if (!userIP) return;
-    const key = `download_delay_${userIP}`;
-    localStorage.setItem(key, Date.now().toString());
+    localStorage.setItem(`download_delay_${userIP}`, Date.now().toString());
 }
 
-function formatTime(milliseconds) {
-    const minutes = Math.floor(milliseconds / 60000);
-    const seconds = Math.floor((milliseconds % 60000) / 1000);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+function formatTime(ms) {
+    const m = Math.floor(ms / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 function updateDownloadButton() {
-    const downloadBtn = document.getElementById("downloadBtn");
-    if (!selectedFirmware || !downloadBtn) return;
-    
+    const btn = document.getElementById("downloadBtn");
+    if (!btn || !selectedFirmware) return;
     const timeLeft = getDownloadTimeLeft();
-    
     if (timeLeft > 0) {
-        downloadBtn.textContent = `Tunggu... ${formatTime(timeLeft)}`;
-        downloadBtn.className = "download-btn locked";
-        downloadBtn.disabled = true;
-        downloadBtn.style.pointerEvents = "none";
-        downloadBtn.style.cursor = "not-allowed";
+        btn.textContent = `Tunggu... ${formatTime(timeLeft)}`;
+        btn.className = "download-btn locked";
+        btn.disabled = true;
     } else {
-        downloadBtn.textContent = "Download";
-        downloadBtn.className = "download-btn unlocked";
-        downloadBtn.disabled = false;
-        downloadBtn.style.pointerEvents = "auto";
-        downloadBtn.style.cursor = "pointer";
+        btn.textContent = "Download";
+        btn.className = "download-btn unlocked";
+        btn.disabled = false;
     }
 }
 
 function startCountdown() {
     if (countdownInterval) clearInterval(countdownInterval);
-    
     countdownInterval = setInterval(() => {
         updateDownloadButton();
-        
-        const timeLeft = getDownloadTimeLeft();
-        if (timeLeft === 0) {
+        if (getDownloadTimeLeft() === 0) {
             clearInterval(countdownInterval);
             countdownInterval = null;
         }
     }, 1000);
 }
 
-function initThemeSystem() {
-    const savedTheme = localStorage.getItem('xidzs-theme') || 'neomorp';
-    applyTheme(savedTheme);
-    document.querySelectorAll('.theme-button').forEach(btn => {
-        btn.addEventListener('click', function() {
-            applyTheme(this.dataset.theme);
-            localStorage.setItem('xidzs-theme', this.dataset.theme);
-        });
-    });
+function cleanup() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = null;
 }
 
-function applyTheme(themeName) {
-    document.body.classList.remove('theme-dark', 'theme-blue', 'theme-green', 'theme-purple');
-    if (themeName !== 'neomorp') {
-        document.body.classList.add(`theme-${themeName}`);
-    }
-    document.querySelectorAll('.theme-button').forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.dataset.theme === themeName) btn.classList.add('active');
-    });
-}
-
+// ================== EMPTY / ERROR STATE ==================
 function showEmptyState(message) {
-    const firmwareCountElement = document.getElementById("firmwareCount");
-    const searchBtnElement = document.getElementById("searchBtn");
     const wizard = document.getElementById("wizard");
-    
-    if (firmwareCountElement) {
-        firmwareCountElement.textContent = message;
-    }
-    if (searchBtnElement) {
-        searchBtnElement.textContent = "Pencarian";
-    }
-    
-    if (wizard) {
-        wizard.innerHTML = `
-            <div class="empty-state" style="text-align: center; padding: 40px; color: #666;">
-                <h3>${message}</h3>
-                <p>Comingson yah sayang | Terimakasih.</p>
-                <button onclick="loadData()" style="margin-top: 15px; padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    Refresh
-                </button>
-            </div>
-        `;
-    }
+    if (!wizard) return;
+    wizard.innerHTML = `<div style="text-align:center;padding:40px;color:#666;">
+        <h3>${message}</h3>
+        <p>Coming soon!</p>
+        <button onclick="initApp()" style="margin-top:15px;padding:10px 20px;background:#007bff;color:white;border:none;border-radius:4px;cursor:pointer;">Sabar Yah</button>
+    </div>`;
 }
 
 function showError(message) {
-    const firmwareCountElement = document.getElementById("firmwareCount");
-    const searchBtnElement = document.getElementById("searchBtn");
     const wizard = document.getElementById("wizard");
-    
-    if (firmwareCountElement) {
-        firmwareCountElement.textContent = "Error loading firmware";
-    }
-    if (searchBtnElement) {
-        searchBtnElement.textContent = "Pencarian";
-    }
-    
-    if (wizard) {
-        wizard.innerHTML = `
-            <div class="error-message" style="text-align: center; padding: 40px; color: #ff6b6b;">
-                <h3>Firmware Belum Tersedia Sayang</h3>
-                <p>Error: ${message}</p>
-                <button onclick="loadData()" style="margin-top: 15px; padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    Coba Lagi Nanti
-                </button>
-            </div>
-        `;
-    }
+    if (!wizard) return;
+    wizard.innerHTML = `<div style="text-align:center;padding:40px;color:#ff6b6b;">
+        <h3>Firmware Belum Tersedia</h3>
+        <p>Error: ${message}</p>
+        <button onclick="initApp()" style="margin-top:15px;padding:10px 20px;background:#dc3545;color:white;border:none;border-radius:4px;cursor:pointer;">Coba Lagi Nanti</button>
+    </div>`;
 }
 
+// ================== APP INIT ==================
 async function loadData() {
     try {
-        const res = await fetch(apiURL, { 
-            cache: "no-cache",
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!res.ok) {
-            throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        
+        const res = await fetch(apiURL, { cache: "no-cache", headers: { 'Content-Type': 'application/json' } });
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const releases = await res.json();
-        
-        if (releases.message) {
-            throw new Error(releases.message);
-        }
-        
-        if (!Array.isArray(releases) || releases.length === 0) {
-            showEmptyState("Tidak ada firmware ditemukan");
-            return;
-        }
-        
+        if (!Array.isArray(releases) || releases.length === 0) throw new Error("Tidak ada firmware ditemukan");
+
         builds = [];
         releases.forEach(rel => {
-            if (!rel.assets || rel.assets.length === 0) {
-                return;
-            }
-            
+            if (!rel.assets) return;
             rel.assets.forEach(asset => {
                 if (!asset.name || !asset.browser_download_url) return;
-                if (!asset.name.match(/\.(img|bin|gz|tar|zip|xz|7z)$/i)) return;
-                
+                if (!asset.name.match(/\.(img|bin|gz|tar|zip|xz|7z|img\.gz|tar\.gz|tar\.xz|bin\.gz|bz2)$/i)) return;
+                if (asset.name.toLowerCase().includes("rootfs")) return;
                 const cleanName = cleanFileName(asset.name);
                 if (!cleanName) return;
-                
                 builds.push({
                     displayName: cleanName,
                     originalName: asset.name,
                     category: getFirmwareCategory(asset.name),
+                    device: getDeviceCategory(asset.name),
                     url: asset.browser_download_url,
                     size: asset.size || 0,
-                    downloadCount: typeof asset.download_count === "number" ? asset.download_count : 0
+                    downloadCount: asset.download_count || 0,
+                    publishedAt: rel.published_at || rel.created_at || null
                 });
             });
         });
-        
-        if (builds.length === 0) {
-            showEmptyState("Tidak ada firmware ditemukan");
-            return;
-        }
-        
-        const uniqueBuilds = [];
-        const seen = new Set();
-        builds.forEach(b => {
-            const n = b.displayName.toLowerCase().trim();
-            if (!seen.has(n) && n.length > 0) {
-                seen.add(n);
-                uniqueBuilds.push(b);
-            }
-        });
-        builds = uniqueBuilds;
-        
-        const firmwareCountElement = document.getElementById("firmwareCount");
-        const searchBtnElement = document.getElementById("searchBtn");
-        
-        if (firmwareCountElement) {
-            firmwareCountElement.textContent = `${builds.length} Firmware Tersedia`;
-        }
-        if (searchBtnElement) {
-            searchBtnElement.textContent = `Pencarian`;
-        }
-        
+
+        if (builds.length === 0) throw new Error("Tidak ada firmware ditemukan");
+
         initWizard();
-        
+
     } catch (error) {
         console.error("Error loading firmware data:", error);
         showError(error.message);
     }
 }
 
+// ================== WIZARD UI ==================
 function initWizard() {
     const wizard = document.getElementById("wizard");
     if (!wizard) return;
-    
-    const allCount = builds.length;
-    const openwrtCount = builds.filter(b => b.category === 'openwrt').length;
-    const immortalCount = builds.filter(b => b.category === 'immortalwrt').length;
-    
+
+    // Hitung jumlah firmware per device & kategori
+    const deviceCounts = {};
+    const firmwareCounts = {};
+    builds.forEach(b => {
+        deviceCounts[b.device] = (deviceCounts[b.device] || 0) + 1;
+        firmwareCounts[b.category] = (firmwareCounts[b.category] || 0) + 1;
+    });
+
+    // Generate tombol kategori
+    let categoryHTML = `<button class="category-btn active" data-category="all">Semua (${builds.length})</button>`;
+    for (const [cat, _] of Object.entries(firmwareMap)) {
+        const count = firmwareCounts[cat] || 0;
+        categoryHTML += `<button class="category-btn" data-category="${cat}">${cat.toUpperCase()} (${count})</button>`;
+    }
+
+    // Generate tombol device
+    let deviceHTML = `<button class="device-btn active" data-device="all">Semua</button>`;
+    for (const [category, value] of Object.entries(deviceMap)) {
+        if (typeof value === 'object') { // sub-device
+            for (const subDevice in value) {
+                const count = deviceCounts[subDevice] || 0;
+                deviceHTML += `<button class="device-btn" data-device="${subDevice}">${subDevice.toUpperCase()} (${count})</button>`;
+            }
+        } else if (Array.isArray(value)) {
+            const count = deviceCounts[category] || 0;
+            deviceHTML += `<button class="device-btn" data-device="${category}">${category.toUpperCase()} (${count})</button>`;
+        }
+    }
+
     wizard.innerHTML = `
         <div class="step-card active">
             <label>Pilih Kategori Firmware:</label>
-            <div class="category-buttons">
-                <button class="category-btn active" data-category="all">Semua (${allCount})</button>
-                <button class="category-btn" data-category="openwrt">OpenWrt (${openwrtCount})</button>
-                <button class="category-btn" data-category="immortalwrt">ImmortalWrt (${immortalCount})</button>
-            </div>
+            <div class="category-buttons">${categoryHTML}</div>
+        </div>
+        <div class="step-card active">
+            <label>Pilih Device:</label>
+            <div class="device-buttons">${deviceHTML}</div>
         </div>
         <div class="step-card active">
             <div class="firmware-header">
                 <label>Firmware:</label>
                 <button class="search-toggle-btn" onclick="toggleSearch()">Cari</button>
             </div>
-            <div class="search-select" style="display: none;">
-                <input type="text" placeholder="Cari Firmware..." />
+            <div class="search-select" style="display:none;">
+                <input type="text" placeholder="Cari Firmware Devices..." />
             </div>
             <div class="firmware-list"><ul></ul></div>
         </div>
         <div class="step-card active">
             <div class="locked-download-section">
                 <div class="download-area">
-                    <div class="selected-info">
-                        <div class="no-selection"><p>Pilih firmware terlebih dahulu</p></div>
-                    </div>
+                    <div class="selected-info"><div class="no-selection"><p>Pilih Firmware Terlebih Dahulu</p></div></div>
                     <div class="action-buttons">
                         <button class="download-btn locked" id="downloadBtn" onclick="handleDownload()">Download</button>
-                        <div class="info-buttons">
-                            <button class="info-btn" onclick="openModal('infoModal')">Informasi</button>
-                            <button class="features-btn" onclick="openModal('featuresModal')">Features</button>
-                            <button class="features-btn" onclick="openModal('aboutModal')">About</button>
-                            <button class="sumber-btn" onclick="openModal('sumberModal')">Sumber & Credit</button>
-                            <button class="changelog-btn" onclick="openModal('changelogModal')">Changelog</button>
-                            <button class="owner-btn" onclick="openModal('ownerModal')">Owner</button>
-                        </div>
                     </div>
                 </div>
             </div>
-        </div>`;
+        </div>
+    `;
+
     setupEventHandlers();
 }
 
+// ================== EVENTS ==================
 function setupEventHandlers() {
     const ul = document.querySelector(".firmware-list ul");
     const input = document.querySelector(".search-select input");
-    
     if (!ul || !input) return;
-    
+
     let currentCategory = "all";
+    let currentDevice = "all";
 
     document.querySelectorAll(".category-btn").forEach(btn => {
         btn.onclick = () => {
@@ -332,175 +299,117 @@ function setupEventHandlers() {
             currentCategory = btn.dataset.category;
             input.value = "";
             selectedFirmware = null;
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
-                countdownInterval = null;
-            }
-            updateDownloadSection();
+            if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+            renderList("");
+        };
+    });
+
+    document.querySelectorAll(".device-btn").forEach(btn => {
+        btn.onclick = () => {
+            document.querySelectorAll(".device-btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            currentDevice = btn.dataset.device;
+            input.value = "";
+            selectedFirmware = null;
+            if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
             renderList("");
         };
     });
 
     function renderList(filter = "") {
         ul.innerHTML = "";
-        let filtered = currentCategory === "all" ? builds : builds.filter(b => b.category === currentCategory);
+        let filtered = builds;
+        if (currentCategory !== "all") filtered = filtered.filter(b => b.category === currentCategory);
+        if (currentDevice !== "all") filtered = filtered.filter(b => b.device === currentDevice);
+
         const searchFiltered = filtered.filter(b => b.displayName.toLowerCase().includes(filter.toLowerCase()))
-        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+            .sort((a,b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
         if (searchFiltered.length === 0) {
             ul.innerHTML = '<li style="text-align:center;color:var(--secondary-color);cursor:default;">Tidak ada firmware yang ditemukan</li>';
             return;
         }
+
         searchFiltered.forEach(b => {
             const li = document.createElement("li");
-            li.innerHTML = `
-                <div class="firmware-info">
-                    <div class="firmware-name">${b.displayName}</div>
-                    <div class="firmware-meta">
-                        <span class="file-size">Size: ${formatFileSize(b.size)}</span>
-                        <span class="download-count">Downloads: ${formatDownloadCount(adjustDownloadCount(b.url, b.downloadCount))}</span>
-                    </div>
-                </div>`;
+            li.innerHTML = `<div class="firmware-info">
+                <div class="firmware-name">${b.displayName}</div>
+                <div class="firmware-meta">
+                    <span class="device-type">${b.device.toUpperCase()}</span>
+                    <span class="file-size">Size: ${formatFileSize(b.size)}</span>
+                    <span class="download-count">Downloads: ${formatDownloadCount(adjustDownloadCount(b.url, b.downloadCount))}</span>
+                    <span class="release-date">Date: ${formatDate(b.publishedAt)}</span>
+                </div>
+            </div>`;
             li.onclick = () => {
                 ul.querySelectorAll("li").forEach(li => li.classList.remove("selected"));
-                selectedFirmware = b;
                 li.classList.add("selected");
-                if (countdownInterval) {
-                    clearInterval(countdownInterval);
-                    countdownInterval = null;
-                }
-                updateDownloadSection();
+                selectedFirmware = b;
+                updateSelectedSection();
                 updateDownloadButton();
-                
-                const timeLeft = getDownloadTimeLeft();
-                if (timeLeft > 0) {
-                    startCountdown();
-                }
+                if (getDownloadTimeLeft() > 0) startCountdown();
             };
             ul.appendChild(li);
         });
     }
 
-    function updateDownloadSection() {
-        const selectedInfo = document.querySelector(".selected-info");
-        const downloadBtn = document.getElementById("downloadBtn");
-        
-        if (!selectedInfo || !downloadBtn) return;
-        
-        if (selectedFirmware) {
-            selectedInfo.innerHTML = `
-                <div class="firmware-selected">
-                    <div class="firmware-details">
-                        <strong>${selectedFirmware.displayName}</strong><br>
-                        <small>Category: ${selectedFirmware.category.toUpperCase()}</small><br>
-                        <small style="color: var(--secondary-color);">File: ${selectedFirmware.originalName}</small>
-                        <span class="file-size">Size: ${formatFileSize(selectedFirmware.size)}</span>
-                        <span class="download-count">Downloads: ${formatDownloadCount(adjustDownloadCount(selectedFirmware.url, selectedFirmware.downloadCount))}</span>
-                    </div>
-                    <div class="download-url">${selectedFirmware.url}</div>
-                </div>`;
-            downloadBtn.textContent = "Download";
-            downloadBtn.className = "download-btn unlocked";
-        } else {
-            selectedInfo.innerHTML = '<div class="no-selection"><p>Pilih firmware terlebih dahulu</p></div>';
-            downloadBtn.textContent = "Download";
-            downloadBtn.className = "download-btn locked";
+    function updateSelectedSection() {
+        const sel = document.querySelector(".selected-info");
+        if (!sel) return;
+        if (!selectedFirmware) {
+            sel.innerHTML = '<div class="no-selection"><p>Pilih Firmware Terlebih Dahulu</p></div>';
+            return;
         }
+        sel.innerHTML = `<div class="firmware-selected">
+            <strong>${selectedFirmware.displayName}</strong><br>
+            <small>Category: ${selectedFirmware.category.toUpperCase()}</small><br>
+            <small>Device: ${selectedFirmware.device.toUpperCase()}</small><br>
+            <small style="color: var(--secondary-color);">File: ${selectedFirmware.originalName}</small><br>
+            <span class="file-size">Size: ${formatFileSize(selectedFirmware.size)}</span>
+            <span class="download-count">Downloads: ${formatDownloadCount(adjustDownloadCount(selectedFirmware.url, selectedFirmware.downloadCount))}</span>
+            <span class="release-date">Date: ${formatDate(selectedFirmware.publishedAt)}</span>
+        </div>`;
     }
 
     renderList();
     input.oninput = () => renderList(input.value);
-    updateDownloadSection();
 }
 
+// ================== DOWNLOAD HANDLER ==================
 function handleDownload() {
-    if (!selectedFirmware) return;
-    
-    if (!canDownload()) {
-        return;
-    }
-    
-    const downloadedKey = `downloaded_${selectedFirmware.url}_${userIP}`;
-    const wasDownloaded = localStorage.getItem(downloadedKey);
-    
-    if (!wasDownloaded) {
-        localStorage.setItem(downloadedKey, "true");
-    }
-    
+    if (!selectedFirmware || !canDownload()) return;
+    const key = `downloaded_${selectedFirmware.url}_${userIP}`;
+    if (!localStorage.getItem(key)) localStorage.setItem(key, "true");
     setDownloadDelay();
     startCountdown();
-    
     window.open(selectedFirmware.url, "_blank");
 }
 
+// ================== SEARCH ==================
 function toggleSearch() {
-    const searchSelect = document.querySelector(".search-select");
-    const toggleBtn = document.querySelector(".search-toggle-btn");
-    
-    if (!searchSelect || !toggleBtn) return;
-    
-    if (searchSelect.style.display === "none") {
-        searchSelect.style.display = "block";
-        toggleBtn.textContent = "Tutup";
-        toggleBtn.classList.add("active");
+    const sel = document.querySelector(".search-select");
+    const btn = document.querySelector(".search-toggle-btn");
+    if (!sel || !btn) return;
+    if (sel.style.display === "none") {
+        sel.style.display = "block"; btn.textContent = "Tutup"; btn.classList.add("active");
     } else {
-        searchSelect.style.display = "none";
-        toggleBtn.textContent = "Cari";
-        toggleBtn.classList.remove("active");
-        const input = searchSelect.querySelector("input");
-        if (input) {
-            input.value = "";
-            input.dispatchEvent(new Event('input'));
-        }
+        sel.style.display = "none"; btn.textContent = "Cari"; btn.classList.remove("active");
+        const input = sel.querySelector("input"); if (input) { input.value = ""; input.dispatchEvent(new Event('input')); }
     }
 }
 
-function openModal(modalId) {
-    const modal = document.getElementById(modalId);
-    const wizardContainer = document.querySelector('.wizard-container');
-    
-    if (!modal) return;
-    
-    if (wizardContainer) {
-        wizardContainer.classList.add('blur-active');
+// ================== INIT APP ==================
+async function initApp() {
+    try {
+        await getUserIP();
+        await loadData();
+    } catch (err) {
+        console.error(err);
+        showError("Failed to initialize app");
     }
-    modal.style.display = "block";
-    setTimeout(() => modal.classList.add('show'), 10);
 }
 
-function closeModal(modal) {
-    const wizardContainer = document.querySelector('.wizard-container');
-    
-    if (wizardContainer) {
-        wizardContainer.classList.remove('blur-active');
-    }
-    modal.classList.remove('show');
-    setTimeout(() => modal.style.display = "none", 300);
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-    initThemeSystem();
-    
-    const searchBtn = document.getElementById("searchBtn");
-    if (searchBtn) {
-        searchBtn.onclick = () => {
-            const wizard = document.getElementById("wizard");
-            if (wizard) {
-                wizard.scrollIntoView({ behavior: 'smooth' });
-            }
-        };
-    }
-    
-    document.querySelectorAll(".close").forEach(btn => {
-        btn.onclick = function() { 
-            const modal = this.closest(".modal");
-            if (modal) closeModal(modal);
-        };
-    });
-    
-    window.onclick = e => {
-        if (e.target.classList.contains("modal")) closeModal(e.target);
-    };
+document.addEventListener("DOMContentLoaded", async () => {
+    await initApp();
+    window.addEventListener('beforeunload', cleanup);
 });
-
-loadData();
