@@ -1,125 +1,237 @@
-async function loadFirmware() {
-  try {
-    const response = await fetch("releases.json");
-    const releases = await response.json();
+const apiURL = "./releases.json";
+let allFirmware = [];
+let selectedFirmware = null;
+let userIP = null;
+let countdownInterval = null;
 
-    window.allFirmware = [];
+// Ambil IP pengguna
+async function getUserIP() {
+    try {
+        const res = await fetch("https://api64.ipify.org?format=json");
+        const data = await res.json();
+        userIP = data.ip;
+    } catch {
+        userIP = "unknown";
+    }
+}
+getUserIP();
 
-    releases.forEach(release => {
-      if (release.assets) {
-        release.assets.forEach(asset => {
-          const fw = {
-            name: asset.name,
-            url: asset.browser_download_url,
-            size: (asset.size / 1024 / 1024).toFixed(2) + " MB",
-            downloads: asset.download_count,
-            category: release.name.includes("ImmortalWrt") ? "ImmortalWrt" : "OpenWrt",
-            device: detectDevice(asset.name)
-          };
-          window.allFirmware.push(fw);
+// Deteksi SOC berdasarkan nama file
+function detectDevice(filename) {
+    const lower = filename.toLowerCase();
+    const socList = ["s905x4", "s905x3", "s905x2", "s905x"];
+    for (let soc of socList) {
+        if (lower.includes(soc)) return soc.toUpperCase();
+    }
+    return "UNKNOWN";
+}
+
+// Format ukuran file
+function formatFileSize(bytes) {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B','KB','MB','GB'];
+    const i = Math.floor(Math.log(bytes)/Math.log(k));
+    return (bytes/Math.pow(k,i)).toFixed(1)+' '+sizes[i];
+}
+
+// Format download count
+function formatDownloadCount(count) {
+    if (count >= 1000000) return (count/1000000).toFixed(1)+'M';
+    if (count >= 1000) return (count/1000).toFixed(1)+'K';
+    return count.toString();
+}
+
+// Delay download per IP
+function getDownloadTimeLeft() {
+    if (!userIP) return 0;
+    const key = `download_delay_${userIP}`;
+    const last = localStorage.getItem(key);
+    if (!last) return 0;
+    const diff = Date.now() - parseInt(last);
+    const delay = 60*1000; // 1 menit
+    return diff < delay ? delay-diff : 0;
+}
+
+function canDownload() { return getDownloadTimeLeft()===0; }
+function setDownloadDelay() { if(userIP) localStorage.setItem(`download_delay_${userIP}`, Date.now().toString()); }
+function formatTime(ms) {
+    const m = Math.floor(ms/60000);
+    const s = Math.floor((ms%60000)/1000);
+    return `${m}:${s.toString().padStart(2,'0')}`;
+}
+
+function updateDownloadButton() {
+    const btn = document.getElementById("downloadBtn");
+    if (!selectedFirmware || !btn) return;
+    const timeLeft = getDownloadTimeLeft();
+    if(timeLeft>0){
+        btn.textContent=`Tunggu... ${formatTime(timeLeft)}`;
+        btn.disabled=true;
+        btn.className="download-btn locked";
+    }else{
+        btn.textContent="Download";
+        btn.disabled=false;
+        btn.className="download-btn unlocked";
+    }
+}
+
+function startCountdown(){
+    if(countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = setInterval(()=>{
+        updateDownloadButton();
+        if(getDownloadTimeLeft()===0){
+            clearInterval(countdownInterval);
+            countdownInterval=null;
+        }
+    },1000);
+}
+
+// Load releases.json
+async function loadData() {
+    const loadingEl = document.getElementById("firmwareCount");
+    loadingEl.textContent="⏳ Memuat firmware...";
+    try{
+        const res = await fetch(apiURL,{cache:"no-cache"});
+        const releases = await res.json();
+        allFirmware = [];
+        releases.forEach(rel=>{
+            if(rel.assets) rel.assets.forEach(asset=>{
+                if(!asset.name || !asset.browser_download_url) return;
+                if(!asset.name.match(/\.(img|bin|gz|tar|zip|xz|7z)$/i)) return;
+                allFirmware.push({
+                    name: asset.name,
+                    displayName: asset.name.replace(/\.(img|bin|gz|tar|zip|xz|7z)$/i,''),
+                    url: asset.browser_download_url,
+                    size: asset.size,
+                    downloads: asset.download_count||0,
+                    category: (asset.name.toLowerCase().includes("immortal")?"ImmortalWrt":"OpenWrt"),
+                    device: detectDevice(asset.name)
+                });
+            });
         });
-      }
+        loadingEl.textContent=`${allFirmware.length} Firmware Tersedia`;
+        buildWizard(allFirmware);
+        displayFirmware(allFirmware);
+    }catch(e){
+        console.error(e);
+        loadingEl.textContent="Error loading firmware";
+    }
+}
+
+// Build wizard (kategori + SOC filter + search)
+function buildWizard(firmwares){
+    const wizard=document.getElementById("wizard");
+    wizard.innerHTML="";
+
+    // Kategori OpenWrt / ImmortalWrt / Semua
+    const categories=["ALL","OpenWrt","ImmortalWrt"];
+    const catDiv=document.createElement("div");
+    catDiv.className="step-card";
+    catDiv.innerHTML="<label>Pilih Kategori:</label>";
+    categories.forEach(cat=>{
+        const btn=document.createElement("button");
+        btn.innerText=cat;
+        btn.onclick=()=>filterFirmware(cat==="ALL"?null:cat,null);
+        catDiv.appendChild(btn);
+    });
+    wizard.appendChild(catDiv);
+
+    // SOC filter
+    const socs=["S905X","S905X2","S905X3","S905X4"];
+    const socDiv=document.createElement("div");
+    socDiv.className="step-card";
+    socDiv.innerHTML="<label>Pilih SOC:</label>";
+    socs.forEach(soc=>{
+        const btn=document.createElement("button");
+        btn.innerText=soc;
+        btn.onclick=()=>filterFirmware(null,soc);
+        socDiv.appendChild(btn);
+    });
+    wizard.appendChild(socDiv);
+
+    // Search bar
+    const searchDiv=document.createElement("div");
+    searchDiv.className="step-card";
+    searchDiv.innerHTML='<input type="text" id="fwSearch" placeholder="Cari firmware..." style="width:100%;padding:6px;margin-bottom:10px;">';
+    wizard.appendChild(searchDiv);
+    document.getElementById("fwSearch").addEventListener("input",(e)=>{
+        const val=e.target.value.toLowerCase();
+        const filtered=allFirmware.filter(fw=>fw.displayName.toLowerCase().includes(val));
+        displayFirmware(filtered);
     });
 
-    document.getElementById("firmwareCount").innerText = window.allFirmware.length;
+    // Container firmware list
+    const listDiv=document.createElement("div");
+    listDiv.className="step-card";
+    listDiv.innerHTML='<div id="firmware-list" style="margin-top:10px;"></div>';
+    wizard.appendChild(listDiv);
 
-    buildWizard(window.allFirmware);
-    displayFirmware(window.allFirmware);
-
-  } catch (error) {
-    console.error("Gagal memuat releases.json", error);
-  }
-}
-
-function detectDevice(filename) {
-  const lower = filename.toLowerCase();
-  const knownDevices = ["hg680p", "b860h", "s905x", "rk3328"];
-  for (let dev of knownDevices) {
-    if (lower.includes(dev)) return dev.toUpperCase();
-  }
-  const match = lower.match(/openwrt-(.*?)-/);
-  return match ? match[1].toUpperCase() : "UNKNOWN";
-}
-
-function buildWizard(firmwares) {
-  const wizard = document.getElementById("wizard");
-  wizard.innerHTML = "";
-
-  const categories = [...new Set(firmwares.map(fw => fw.category))];
-  const devices = [...new Set(firmwares.map(fw => fw.device))];
-
-  const step1 = document.createElement("div");
-  step1.className = "step-card";
-  step1.innerHTML = "<label>Pilih Kategori:</label>";
-  const catBtns = document.createElement("div");
-  catBtns.className = "category-buttons";
-  categories.forEach(cat => {
-    const btn = document.createElement("button");
-    btn.innerText = cat;
-    btn.className = "category-btn";
-    btn.onclick = () => filterFirmware(cat, null);
-    catBtns.appendChild(btn);
-  });
-  step1.appendChild(catBtns);
-  wizard.appendChild(step1);
-
-  const step2 = document.createElement("div");
-  step2.className = "step-card";
-  step2.innerHTML = "<label>Pilih Device:</label>";
-  const devBtns = document.createElement("div");
-  devBtns.className = "device-buttons";
-  devices.forEach(dev => {
-    const btn = document.createElement("button");
-    btn.innerText = dev;
-    btn.className = "device-btn";
-    btn.onclick = () => filterFirmware(null, dev);
-    devBtns.appendChild(btn);
-  });
-  step2.appendChild(devBtns);
-  wizard.appendChild(step2);
-}
-
-function filterFirmware(category, device) {
-  let filtered = window.allFirmware;
-  if (category) filtered = filtered.filter(fw => fw.category === category);
-  if (device) filtered = filtered.filter(fw => fw.device === device);
-  displayFirmware(filtered);
-}
-
-function displayFirmware(firmwares) {
-  const list = document.getElementById("firmware-list");
-  list.innerHTML = "";
-  if (firmwares.length === 0) {
-    list.innerHTML = "<p>Tidak ada firmware ditemukan.</p>";
-    return;
-  }
-
-  firmwares.forEach(fw => {
-    const item = document.createElement("div");
-    item.className = "fw-item";
-    item.innerHTML = `
-      <div>
-        <strong>${fw.name}</strong><br>
-        <small>Size: ${fw.size} | Downloads: ${fw.downloads} | Device: ${fw.device} | Kategori: ${fw.category}</small>
-      </div>
-      <button onclick="selectFirmware('${fw.url}')">Download</button>
+    // Download section
+    const downloadDiv=document.createElement("div");
+    downloadDiv.className="step-card";
+    downloadDiv.innerHTML=`
+        <div class="selected-info"><p>Pilih firmware terlebih dahulu</p></div>
+        <button id="downloadBtn" class="download-btn locked" onclick="handleDownload()">Download</button>
     `;
-    list.appendChild(item);
-  });
+    wizard.appendChild(downloadDiv);
 }
 
-function selectFirmware(url) {
-  const section = document.getElementById("download-section");
-  section.innerHTML = `
-    <p>Firmware terpilih:</p>
-    <a href="${url}" target="_blank"><button>⬇️ Download Sekarang</button></a>
-  `;
+// Filter firmware
+function filterFirmware(category, soc){
+    let filtered=allFirmware;
+    if(category) filtered=filtered.filter(fw=>fw.category===category);
+    if(soc) filtered=filtered.filter(fw=>fw.device===soc);
+    displayFirmware(filtered);
 }
 
-document.getElementById("searchBtn").addEventListener("click", () => {
-  const query = document.getElementById("searchInput").value.toLowerCase();
-  const results = window.allFirmware.filter(fw => fw.name.toLowerCase().includes(query));
-  displayFirmware(results);
-});
+// Display firmware list dengan lazy load
+function displayFirmware(firmwares,start=0,limit=50){
+    const list=document.getElementById("firmware-list");
+    if(start===0) list.innerHTML="";
+    const subset=firmwares.slice(start,start+limit);
+    subset.forEach(fw=>{
+        const div=document.createElement("div");
+        div.className="fw-item";
+        div.innerHTML=`
+            <div>
+                <strong>${fw.displayName}</strong><br>
+                <small>${fw.category} | ${fw.device} | Size: ${formatFileSize(fw.size)} | Downloads: ${formatDownloadCount(fw.downloads)}</small>
+            </div>
+            <button onclick="selectFirmware('${fw.url}')">Pilih</button>
+        `;
+        list.appendChild(div);
+    });
+    if(start+limit<firmwares.length){
+        const btn=document.createElement("button");
+        btn.innerText="Load More...";
+        btn.onclick=()=>{
+            btn.remove();
+            displayFirmware(firmwares,start+limit,limit);
+        };
+        list.appendChild(btn);
+    }
+}
 
-loadFirmware();
+// Pilih firmware
+function selectFirmware(url){
+    selectedFirmware=allFirmware.find(fw=>fw.url===url);
+    const infoDiv=document.querySelector(".selected-info");
+    if(selectedFirmware){
+        infoDiv.innerHTML=`<strong>${selectedFirmware.displayName}</strong><br>
+            <small>${selectedFirmware.category} | ${selectedFirmware.device} | Size: ${formatFileSize(selectedFirmware.size)}</small>`;
+        updateDownloadButton();
+    }
+}
+
+// Download firmware
+function handleDownload(){
+    if(!selectedFirmware) return;
+    if(!canDownload()) return;
+    setDownloadDelay();
+    startCountdown();
+    window.open(selectedFirmware.url,"_blank");
+}
+
+// Init
+document.addEventListener("DOMContentLoaded",()=>{loadData();});
