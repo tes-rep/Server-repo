@@ -389,4 +389,10 @@ async function initApp(){
 document.addEventListener("DOMContentLoaded",async()=>{
     initThemeSystem();
     await initApp();
+    document.querySelectorAll('.aml-device-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const device = btn.getAttribute('data-device');
+        filterFirmwareByDevice(device); // Fungsi filter di script.js
+    });
+});
 });
