@@ -1,43 +1,45 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Firmware Downloader</title>
-  <style>
-    body { font-family: Arial, sans-serif; background: #f5f7fa; margin: 0; padding: 0; }
-    header { background: #0078d7; color: white; padding: 1rem; text-align: center; }
-    .container { padding: 1rem; max-width: 900px; margin: auto; }
-    .wizard { display: grid; gap: 1rem; margin-bottom: 1rem; }
-    .step-card { background: white; padding: 1rem; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    .category-buttons, .device-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
-    button { padding: 0.5rem 1rem; border: none; border-radius: 5px; background: #0078d7; color: white; cursor: pointer; }
-    button:hover { background: #005bb5; }
-    .fw-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; margin-bottom: 0.5rem; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    #download-section { background: #fff; padding: 1rem; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-top: 1rem; text-align: center; }
-    #search-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-    #searchInput { flex: 1; padding: 0.5rem; border: 1px solid #ccc; border-radius: 5px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HOUJIE-WRT Firmware</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>📦 Firmware Downloader</h1>
-    <p>Total firmware: <span id="firmwareCount">0</span></p>
-  </header>
-  <div class="container">
-    <div id="wizard" class="wizard"></div>
-
-    <div id="search-bar">
-      <input type="text" id="searchInput" placeholder="Cari firmware...">
-      <button id="searchBtn">Cari</button>
+<div class="wizard-container">
+    <div class="header-flex">
+        <div>
+            <h1 class="animated-text">HOUJIE-WRT</h1>
+            <div class="desc animated-desc">Firmware Custom Untuk Berbagai Devices</div>
+        </div>
+        <div class="header-buttons">
+            <button class="search-btn" id="searchBtn">Pencarian</button>
+        </div>
     </div>
 
-    <div id="firmware-list"></div>
+    <div class="firmware-count" id="firmwareCount">Memuat data...</div>
+    <div id="wizard"></div>
 
-    <div id="download-section">
-      <p>Belum ada firmware dipilih</p>
+    <div class="footer">
+        HJ-WRT 2025 | Tema - Design By Hj
     </div>
-  </div>
-  <script src="script.js"></script>
+</div>
+
+<!-- Modal contoh -->
+<div id="infoModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Informasi Hjs-WRT</h2>
+        <ul class="info-list">
+            <li>Firmware Custom OpenWrt & ImmortalWrt</li>
+            <li>Optimasi untuk pengguna OpenWrt Indonesia</li>
+            <li>Support berbagai devices SOC</li>
+            <li>Opensource & Free</li>
+        </ul>
+    </div>
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>
