@@ -1,156 +1,43 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HOUJIE-WRT Firmware</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Firmware Downloader</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f7fa; margin: 0; padding: 0; }
+    header { background: #0078d7; color: white; padding: 1rem; text-align: center; }
+    .container { padding: 1rem; max-width: 900px; margin: auto; }
+    .wizard { display: grid; gap: 1rem; margin-bottom: 1rem; }
+    .step-card { background: white; padding: 1rem; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .category-buttons, .device-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+    button { padding: 0.5rem 1rem; border: none; border-radius: 5px; background: #0078d7; color: white; cursor: pointer; }
+    button:hover { background: #005bb5; }
+    .fw-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; margin-bottom: 0.5rem; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    #download-section { background: #fff; padding: 1rem; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-top: 1rem; text-align: center; }
+    #search-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    #searchInput { flex: 1; padding: 0.5rem; border: 1px solid #ccc; border-radius: 5px; }
+  </style>
 </head>
 <body>
-    <div class="wizard-container">
-        <div class="header-flex">
-            <div>
-                <h1 class="animated-text">HOUJIE-WRT</h1>
-                <div class="desc animated-desc">Firmware Custom Untuk Berbagai Devices</div>
-            </div>
-            <div class="header-buttons">
-                <button class="search-btn" id="searchBtn">Loading...</button>
-                <div class="theme-selector">
-                    <button class="theme-button active" data-theme="neomorp">Light</button>
-                    <button class="theme-button" data-theme="dark">Dark</button>
-                    <button class="theme-button" data-theme="blue">Blue</button>
-                    <button class="theme-button" data-theme="green">Green</button>
-                    <button class="theme-button" data-theme="purple">Purple</button>
-                </div>
-            </div>
-        </div>
-        
-        <div class="firmware-count" id="firmwareCount">Memuat data...</div>
-        <div id="wizard"></div>
-        
-        <div class="footer">
-            HJ-WRT 2025 | Tema - Design By Hj
-        </div>
+  <header>
+    <h1>📦 Firmware Downloader</h1>
+    <p>Total firmware: <span id="firmwareCount">0</span></p>
+  </header>
+  <div class="container">
+    <div id="wizard" class="wizard"></div>
+
+    <div id="search-bar">
+      <input type="text" id="searchInput" placeholder="Cari firmware...">
+      <button id="searchBtn">Cari</button>
     </div>
 
-    <div id="infoModal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Informasi Hjs-WRT</h2>
-            <ul class="info-list">
-                <li>HJ-WRT Adalah Firmware Custom Berbasis OpenWrt Dan ImmortalWrt</li>
-                <li>Dioptimalkan Khusus Untuk Pengguna Openwrt Indonesia</li>
-                <li>Support Berbagai Jenis Devices Populer</li>
-                <li>Support Berbagai Jenis Modem Rakitan</li>
-                <li>Opensource And Free Firmware</li>
-                <li>Not For Sale</li>
-            </ul>
-        </div>
-    </div>
+    <div id="firmware-list"></div>
 
-    <div id="featuresModal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Features</h2>
-            
-            <h3>Fitur - Fitur</h3>
-            <ul class="info-list">
-                <li>Tema Alpha ⨯ Tema Argon ⨯ Tema Material</li>
-                <li>Amlogic Service ⨯ Droidnet</li>
-                <li>3ginfo-Lite ⨯ Modeminfo ⨯ IP Information</li>
-                <li>FIX TTL ⨯ Tailscale</li>
-                <li>Eqosplus ⨯ Mactodong</li>
-                <li>GPIO LED Support HG680P - B860H</li>
-                <li>MOD-SDCARD Support</li>
-                <li>All Kernel Wifi On For HG680P - B860H</li>
-                <li>Internet Detector ⨯ Connection Monitor</li>
-                <li>Support Modem Rakitan ⨯ Auto Reconnect</li>
-                <li>Auto Time Sync ⨯ File Manager</li>
-                <li>Configurasi Openclash ⨯ Nikki ⨯ Passwall</li>
-            </ul>
-            
-            <h3>Khusus Amlogic Devices</h3>
-            <ul class="info-list">
-                <li>Kernel Versi 5.15.x</li>
-                <li>Kernel Versi 6.1.x</li>
-                <li>Kernel Versi 6.6.x</li>
-                <li>Kernel Versi 6.12.x</li>
-            </ul>
-            
-            <h3>Tunnel Options</h3>
-            <ul class="info-list">
-                <li>OpenClash</li>
-                <li>OpenClash + Nikki</li>
-                <li>OpenClash + Nikki + Passwall</li>
-                <li>No Tunnel</li>
-            </ul>
-        </div>
+    <div id="download-section">
+      <p>Belum ada firmware dipilih</p>
     </div>
-
-    <div id="aboutModal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>About Hjs-WRT</h2>
-            <h3>Tentang Project</h3>
-            <p>Hjs-WRT Adalah Sebuah Firmware Custom Yang Dikembangkan Untuk Komunitas Openwrt Indonesia. Project Ini Bertujuan Untuk Memberikan Pengalaman Networking Yang Lebih Baik Dengan Fitur-Fitur Yang Disesuaikan Dengan Kebutuhan Pengguna.</p>
-        </div>
-    </div>
-
-    <div id="sumberModal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Sumber & Credit</h2>
-            <h3>Base Firmware</h3>
-            <p>OpenWrt | ImmortalWrt</p>
-            <h3>License & Source</h3>
-            <div class="link-list">
-                <a href="https://github.com/de-quenx/Hjs-WRT/blob/main/LICENSE" target="_blank">LICENSE</a><br>
-                <a href="https://github.com/rizkikotet-dev/RTA-WRT" target="_blank">RTA-WrtBuilder By RizkiKotet-Dev</a><br>
-                <a href="https://github.com/frizkyiman/friWrt-MyWrtBuilder" target="_blank">friWrt-MyWrtBuilder By frizkyiman</a><br>
-                <a href="https://github.com/Revincx/MyWrtBuilder" target="_blank">MyWrtBuilder By Revincx</a><br>
-                <a href="https://github.com/armarchindo/ULO-Builder/blob/main/ulo" target="_blank">ULO Builder By DBAI</a><br>
-                <a href="https://t.me/Hj_x" target="_blank">Hjs-WrtBuilder By Fidz</a><br>
-                <a href="https://github.com/ophub" target="_blank">Ophub</a><br>
-                <a href="https://github.com/Dirgha80" target="_blank">for kernel By Dirgha80</a><br>
-            </div>
-        </div>
-    </div>
-
-    <div id="changelogModal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Changelog</h2>
-            <h3>x.08.2025</h3>
-            <ul class="info-list">
-                <li>Change LoginPage</li>
-                <li>Change Netmonitor</li>
-                <li>Optimasi Script</li>
-                <li>Fix Modemmanager</li>
-                <li>Fix Error Small</li>
-            </ul>
-            <h3>x.01.2025</h3>
-            <ul class="info-list">
-                <li></li>
-            </ul>
-        </div>
-    </div>
-
-    <div id="ownerModal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Owner & Developer</h2>
-            <h3>Kontak & Media Sosial</h3>
-            <div class="link-list">
-                <a href="https://github.com/de-quenx" target="_blank">GitHub Profile</a><br>
-                <a href="https://t.me/Hj_x" target="_blank">Telegram</a><br>
-                <a href="https://t.me/HjsWRT" target="_blank">Komunitas Telegram</a><br>
-                <a href="https://www.facebook.com/Fid.Kholiq" target="_blank">Facebook</a><br>
-            </div>
-            <h3>Dukungan dan Support</h3>
-            <p>Jika Anda menyukai project ini, silakan berikan bintang di GitHub dan share ke teman-teman..Terimakasih.!</p>
-        </div>
-    </div>
-
-    <script src="script.js"></script>
+  </div>
+  <script src="script.js"></script>
 </body>
 </html>
