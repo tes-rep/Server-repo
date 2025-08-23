@@ -9,20 +9,46 @@
     --border-color: rgba(0,0,0,0.05);
 }
 
+@keyframes rgbAnimationSoft {
+    0% { color: #ff8a8a; text-shadow: 0 0 8px rgba(255, 138, 138, 0.3); }
+    14.28% { color: #8aff8a; text-shadow: 0 0 8px rgba(138, 255, 138, 0.3); }
+    28.57% { color: #8a8aff; text-shadow: 0 0 8px rgba(138, 138, 255, 0.3); }
+    42.86% { color: #ffff8a; text-shadow: 0 0 8px rgba(255, 255, 138, 0.3); }
+    57.14% { color: #ff8aff; text-shadow: 0 0 8px rgba(255, 138, 255, 0.3); }
+    71.43% { color: #8affff; text-shadow: 0 0 8px rgba(138, 255, 255, 0.3); }
+    85.71% { color: #ffaa8a; text-shadow: 0 0 8px rgba(255, 170, 138, 0.3); }
+    100% { color: #ff8a8a; text-shadow: 0 0 8px rgba(255, 138, 138, 0.3); }
+}
+
+@keyframes slideText {
+    0% { transform: translateX(-15px); }
+    50% { transform: translateX(15px); }
+    100% { transform: translateX(-15px); }
+}
+
 .animated-text {
+    animation: rgbAnimationSoft 8s ease-in-out infinite;
     font-weight: bold;
     transition: all 0.5s ease;
-    color: var(--text-color);
+    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.2));
 }
 
 .animated-desc {
+    animation: slideText 12s ease-in-out infinite;
     font-weight: 500;
     transition: all 0.5s ease;
-    color: var(--secondary-color);
+    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.1));
+    color: #ffa8a8;
+    text-shadow: 0 0 6px rgba(255, 168, 168, 0.2);
 }
 
 .animated-text:hover {
+    animation-play-state: paused;
     transform: scale(1.02);
+}
+
+.animated-desc:hover {
+    animation-play-state: paused;
 }
 
 body.theme-dark {
@@ -121,26 +147,56 @@ body {
     flex-shrink: 0;
 }
 
-.search-btn, .theme-toggle {
+.search-btn {
     border: none;
     background: inherit;
     padding: 8px 12px;
     border-radius: 8px;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: bold;
     cursor: pointer;
     box-shadow: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
     transition: all 0.2s ease;
     color: var(--text-color);
-    min-width: 70px;
 }
 
-.search-btn:hover, .theme-toggle:hover {
+.search-btn:hover {
     box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
     transform: scale(0.98);
 }
 
-.theme-toggle {
+.theme-selector {
+    background: var(--bg-color);
+    border-radius: 12px;
+    padding: 8px;
+    box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light);
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    min-width: auto;
+}
+
+.theme-button {
+    border: none;
+    background: inherit;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 2px 2px 4px var(--shadow-dark), -2px -2px 4px var(--shadow-light);
+    transition: all 0.2s ease;
+    color: var(--text-color);
+    text-align: center;
+}
+
+.theme-button:hover {
+    box-shadow: inset 1px 1px 2px var(--shadow-dark), inset -1px -1px 2px var(--shadow-light);
+    transform: scale(0.98);
+}
+
+.theme-button.active {
+    box-shadow: inset 2px 2px 4px var(--shadow-dark), inset -2px -2px 4px var(--shadow-light);
     color: var(--accent-color);
 }
 
@@ -232,13 +288,6 @@ label {
     flex-wrap: wrap;
 }
 
-.device-buttons {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin-bottom: 15px;
-}
-
 .category-btn {
     flex: 1;
     min-width: 80px;
@@ -256,31 +305,12 @@ label {
     color: var(--text-color);
 }
 
-.device-btn {
-    border: none;
-    background: inherit;
-    padding: 12px 8px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: bold;
-    cursor: pointer;
-    box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light);
-    transition: all 0.2s ease;
-    text-align: center;
-    white-space: nowrap;
-    color: var(--text-color);
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.category-btn:hover, .device-btn:hover {
+.category-btn:hover {
     transform: scale(0.98);
     box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
 }
 
-.category-btn.active, .device-btn.active {
+.category-btn.active {
     box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
     color: var(--accent-color);
     transform: scale(0.96);
@@ -398,18 +428,6 @@ label {
     font-size: 10px;
 }
 
-.device-type {
-    color: #ff6b6b;
-    font-weight: bold;
-    font-size: 10px;
-}
-
-.release-date {
-    color: #8b5cf6;
-    font-weight: bold;
-    font-size: 10px;
-}
-
 .locked-download-section {
     background: inherit;
     border-radius: 15px;
@@ -455,12 +473,6 @@ label {
 }
 
 .firmware-details .download-count {
-    display: block;
-    margin-top: 3px;
-    font-size: 11px;
-}
-
-.firmware-details .release-date {
     display: block;
     margin-top: 3px;
     font-size: 11px;
@@ -712,10 +724,10 @@ label {
         font-size: 11px; 
         padding: 12px 8px; 
     }
-    .category-btn, .device-btn { 
-        font-size: 11px; 
-        padding: 12px 8px; 
-        min-height: 42px;
+    .theme-selector { min-width: auto; }
+    .theme-button { 
+        padding: 5px 8px; 
+        font-size: 9px; 
     }
 }
 
@@ -738,10 +750,10 @@ label {
         flex-wrap: wrap;
         justify-content: center;
     }
-    .theme-toggle { 
-        padding: 6px 12px; 
-        font-size: 10px; 
-        min-width: 60px;
+    .theme-selector { 
+        flex-direction: row; 
+        min-width: auto; 
+        flex-wrap: wrap;
     }
     .download-area { 
         flex-direction: column; 
@@ -759,10 +771,10 @@ label {
         font-size: 10px; 
         padding: 10px 6px; 
     }
-    .category-btn, .device-btn { 
+    .category-btn { 
         font-size: 10px; 
         padding: 10px 6px; 
-        min-height: 40px;
+        min-width: 60px;
     }
     .modal-content { 
         margin: 10% auto; 
@@ -774,6 +786,10 @@ label {
         align-items: flex-start; 
         gap: 10px; 
     }
+    .theme-button { 
+        padding: 4px 6px; 
+        font-size: 8px; 
+    }
     .firmware-list ul li { 
         flex-direction: column; 
         align-items: flex-start; 
@@ -784,13 +800,18 @@ label {
         flex-wrap: wrap; 
         gap: 8px; 
     }
-    .file-size, .download-count, .device-type, .release-date { 
+    .file-size, .download-count { 
         font-size: 9px; 
     }
     .footer { 
         font-size: 11px; 
         margin-top: 20px; 
         padding: 12px; 
+    }
+    .animated-desc {
+        animation: none;
+        transform: none;
+        position: relative;
     }
 }
 
@@ -809,15 +830,12 @@ label {
         font-size: 9px; 
         padding: 8px 4px; 
     }
-    .category-btn, .device-btn { 
+    .category-btn { 
         font-size: 9px; 
         padding: 8px 4px; 
-        min-height: 38px;
+        min-width: 50px;
     }
     .category-buttons {
-        gap: 4px;
-    }
-    .device-buttons {
         gap: 4px;
     }
     .modal-content { 
@@ -825,17 +843,19 @@ label {
         max-width: 95%; 
         padding: 15px; 
     }
-    .theme-toggle { 
-        padding: 5px 10px; 
-        font-size: 9px; 
-        min-width: 50px;
+    .theme-selector { 
+        gap: 4px; 
+    }
+    .theme-button { 
+        padding: 3px 5px; 
+        font-size: 7px; 
     }
     .footer { 
         font-size: 10px; 
         margin-top: 15px; 
         padding: 10px; 
     }
-    .file-size, .download-count, .device-type, .release-date { 
+    .file-size, .download-count { 
         font-size: 8px; 
     }
     .animated-text { 
@@ -843,6 +863,8 @@ label {
     }
     .animated-desc { 
         font-size: 0.9em; 
+        animation: none;
+        transform: none;
     }
     .header-buttons {
         gap: 8px;
@@ -865,17 +887,15 @@ label {
     .category-btn {
         min-width: 100%;
     }
-    .device-buttons {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 6px;
-    }
-    .device-btn {
-        font-size: 8px;
-        padding: 6px 3px;
-        min-height: 36px;
-    }
     .info-buttons {
         grid-template-columns: repeat(2, 1fr);
         grid-template-rows: repeat(3, 1fr);
+    }
+    .theme-selector {
+        flex-direction: column;
+        gap: 6px;
+    }
+    .theme-button {
+        width: 100%;
     }
 }
